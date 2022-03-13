@@ -3,26 +3,25 @@
 #include <string>
 #include <algorithm>
 
-bool is_number(std::string s);
-
-void print_info(std::string COMMAND,
-                std::string PID,
-                std::string USER,
-                std::string FD,
-                std::string TYPE,
-                std::string NODE,
-                std::string NAME);
+#include "inputParser.hpp"
 
 class LSOF {
 private:
     std::string pid;
     std::string command;
     std::string user;
+    InputParser inputparser;
 
-    void readFileInfo(std::string, std::string);
+    void print_info(const std::string &COMMAND,
+                    const std::string &PID,
+                    const std::string &USER,
+                    const std::string &FD,
+                    const std::string &TYPE,
+                    const std::string &NODE,
+                    const std::string &NAME);
+    void readFileInfo(std::string, const std::string &);
     std::string getCOMMAND();
     std::string getUSER();
-    void parsearg();
     void cwdFd();
     void rtdFd();
     void txtFd();
@@ -32,6 +31,7 @@ private:
 
 public:
     LSOF() = delete;
-    LSOF(std::string pid);
+    LSOF(const std::string &pid,
+         const InputParser &inputparser);
     void run();
 };

@@ -3,6 +3,7 @@
 #include <sstream>
 #include <iomanip>
 #include <iostream>
+#include <regex>
 #include <sys/stat.h>
 #include <pwd.h>
 #include <sys/types.h>
@@ -10,25 +11,32 @@
 #include <fcntl.h>
 #include <unistd.h>
 
-
 #include "lsof.hpp"
+#include "utils.hpp"
 
-bool is_number(std::string s) {
-    return !s.empty() && std::find_if(s.begin(), s.end(),
-        [](unsigned char c) { return !std::isdigit(c); }) == s.end();
-}
+void LSOF::print_info(const std::string &COMMAND,
+                const std::string &PID,
+                const std::string &USER,
+                const std::string &FD,
+                const std::string &TYPE,
+                const std::string &NODE,
+                const std::string &NAME) {
 
-void print_info(std::string COMMAND,
-                std::string PID,
-                std::string USER,
-                std::string FD,
-                std::string TYPE,
-                std::string NODE,
-                std::string NAME) {
+    if (!inputparser.getCmdFilter().empty() &&
+        !std::regex_search(COMMAND, std::regex(inputparser.getCmdFilter()))) return;
+    
+    if (!inputparser.getpidFilter().empty() &&
+        !std::regex_search(PID, std::regex(inputparser.getpidFilter()))) return;
+    
+    if (!inputparser.getTypeFilter().empty() &&
+        !std::regex_search(TYPE, std::regex(inputparser.getTypeFilter()))) return;
+    
+    if (!inputparser.getFileNFilter().empty() &&
+        !std::regex_search(NAME, std::regex(inputparser.getFileNFilter()))) return;
 
     std::cout << std::left
               << std::setw(30) << COMMAND
-              << std::setw(5)  << " " << PID
+              << std::setw(8)  << " " << PID
               << std::setw(10) << " " << USER
               << std::setw(5)  << " " << FD
               << std::setw(8)  << " " << TYPE
@@ -37,32 +45,30 @@ void print_info(std::string COMMAND,
               << std::endl;
 }
 
-LSOF::LSOF(std::string pid):
+LSOF::LSOF(const std::string &pid,
+           const InputParser &inputparser):
     pid(pid),
     command(getCOMMAND()),
-    user(getUSER()) {}
+    user(getUSER()),
+    inputparser(inputparser) {}
 
 std::string LSOF::getCOMMAND() {
     std::ifstream infile("/proc/" + pid + "/comm");
     std::string cmd;
-    if(!(infile >> cmd)) {
-        // std::cerr << "iss error";
-        return "";
-    }
+    if (!(infile >> cmd)) return "";
     return cmd;
 }
 
 std::string LSOF::getUSER() {
     struct stat sb;
     struct passwd *pw;
-    if (stat(("/proc/" + pid).c_str(), &sb) == -1) {
-        perror("stat error");
-    }
+    if (stat(("/proc/" + pid).c_str(), &sb) == -1) return "";
     pw = getpwuid(sb.st_uid);
     return std::string(pw->pw_name);
 }
 
 void LSOF::run() {
+    if (command.empty() || user.empty()) return;
     cwdFd();
     rtdFd();
     txtFd();
@@ -110,12 +116,9 @@ void LSOF::memFd() {
 void LSOF::fdFd() {
     DIR *dp;
     struct dirent *dirp;
-    if ((dp = opendir(("/proc/" + pid + "/fd").c_str())) == NULL) {
-        // perror("cannot open procfd");
-        return;
-    }
+    if ((dp = opendir(("/proc/" + pid + "/fd").c_str())) == NULL) return;
     while ((dirp = readdir(dp)) != NULL) {
-        if (is_number(std::string(dirp->d_name))) {
+        if (isnumber(std::string(dirp->d_name))) {
             std::ifstream infile("/proc/" + pid + "/fdinfo/" + std::string(dirp->d_name));
             std::string t, FD;
             int flags;
@@ -137,30 +140,17 @@ void LSOF::noFd() {
     readFileInfo("/proc/" + pid + "/fd", "NOFD");
 }
 
-void LSOF::readFileInfo(std::string filename, std::string FD) {
+void LSOF::readFileInfo(std::string filename, const std::string &FD) {
     struct stat sb;
     char realFileName[PATH_MAX] = {0};
     std::string TYPE = "unknown";
     std::string NODE = "";
-    if (lstat(filename.c_str(), &sb) == -1) {
-        perror("lstat error");
-    }
     
-    if((sb.st_mode & S_IFMT) == S_IFLNK) {
-        if (readlink(filename.c_str(), realFileName, PATH_MAX) == -1) {
-            if(errno == EACCES) {
-                filename += " (Permission denied)";
-            }
-            print_info(command, pid, user, FD, TYPE, NODE, filename);
-            return;
-        }
-        filename = realFileName;
-    }
-
     if (stat(filename.c_str(), &sb) == -1) {
         if(errno == EACCES) {
             filename += " (Permission denied)";
         }
+        // perror("stat error");
         print_info(command, pid, user, FD, TYPE, NODE, filename);
         return;
     }
@@ -175,8 +165,16 @@ void LSOF::readFileInfo(std::string filename, std::string FD) {
         case S_IFSOCK: TYPE = "SOCK";      break;
         default:       TYPE = "unknown";   break;
     }
+
+    if (lstat(filename.c_str(), &sb) == -1) return;
+    if((sb.st_mode & S_IFMT) == S_IFLNK) {
+        if (readlink(filename.c_str(), realFileName, PATH_MAX) == -1) {
+            print_info(command, pid, user, FD, TYPE, NODE, filename);
+            return;
+        }
+        filename = realFileName;
+    }
+
     print_info(command, pid, user, FD, TYPE, NODE, filename);
     return;
 }
-
-
