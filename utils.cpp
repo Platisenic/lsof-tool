@@ -14,14 +14,14 @@ bool isnumber(std::string s) {
 
 void print_header() {
 
-    std::cout << std::left
+    std::cout << std::left << std::setfill(' ')
               << std::setw(30) << "COMMAND"
-              << std::setw(5)  << " " << "PID"
-              << std::setw(10) << " " << "USER"
-              << std::setw(5)  << " " << "FD"
-              << std::setw(8)  << " " << "TYPE"
-              << std::setw(10) << " " << "NODE"
-              << std::setw(30) << " " << "NAME"
+              << std::setw(8)  << "PID"
+              << std::setw(10) << "USER"
+              << std::setw(5)  << "FD"
+              << std::setw(10)  << "TYPE"
+              << std::setw(10) << "NODE"
+              << std::setw(30) << "NAME"
               << std::endl;
 }
 

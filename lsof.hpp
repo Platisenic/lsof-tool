@@ -27,7 +27,6 @@ private:
     void txtFd();
     void memFd();
     void fdFd();
-    void noFd();
 
 public:
     LSOF() = delete;
