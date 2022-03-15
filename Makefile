@@ -1,5 +1,5 @@
 CXX = g++
-CFLAGS = -g -std=c++11
+CFLAGS = -O2 -Wall -Werror -Wextra -std=c++11
 EXEC = hw1
 PACKNAME = 310552029_hw1
 
