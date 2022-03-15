@@ -1,5 +1,5 @@
 #include <algorithm>
-#include <set>
+#include <unordered_set>
 #include "inputParser.hpp"
 
 InputParser::InputParser(int argc, char **argv) {
@@ -30,7 +30,7 @@ std::string InputParser::getCmdOpt(const std::string &opt) {
 
 bool InputParser::isvalid() {
     if(typeFilter.empty()) return true;
-    std::set<std::string> validType {"REG", "CHR", "DIR", "FIFO", "SOCK", "unknown"};
+    std::unordered_set<std::string> validType {"REG", "CHR", "DIR", "FIFO", "SOCK", "unknown"};
     if(validType.count(typeFilter) == 0) return false;
     return true;
 }

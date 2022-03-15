@@ -10,7 +10,7 @@
 int main(int argc, char **argv) {
     InputParser inputparser(argc, argv);
     if(!inputparser.isvalid()) {
-        std::cerr << "Invalid TYPE option" << std::endl;
+        std::cout << "Invalid TYPE option" << std::endl;
         return 1;
     }
 

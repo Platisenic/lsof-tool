@@ -95,13 +95,9 @@ void LSOF::memFd() {
     std::string previnode = "";
     while(std::getline(infile, line)) {
         std::istringstream iss(line);
-        if (!(iss >> t >> t >> t >> t >> inode)) {
-            std::cerr << "iss error"; 
-        }
+        if (!(iss >> t >> t >> t >> t >> inode)) continue;
         if(inode != "0" && inode != previnode) {
-            if(!(iss >> filename)) {
-                std::cerr << "iss error";
-            }
+            if(!(iss >> filename)) continue;
             if(iss >> deleted && deleted == "(deleted)") {
                 readFileInfo(filename, "DEL");
             }else {
@@ -130,7 +126,7 @@ void LSOF::fdFd() {
                 case O_RDONLY: FD += "r"; break;
                 case O_WRONLY: FD += "w"; break;
                 case O_RDWR: FD += "u"; break;
-                default: std::cerr << "file mode error\n"; break;
+                default: break;
             }
             readFileInfo("/proc/" + pid + "/fd/" + std::string(dirp->d_name), FD);
         }
