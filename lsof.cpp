@@ -10,11 +10,13 @@
 #include <dirent.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <errno.h>
+#include <stdio.h>
 
 #include "lsof.hpp"
 #include "utils.hpp"
 
-void LSOF::print_info(const std::string &COMMAND,
+void LSOF::save_info(const std::string &COMMAND,
                 const std::string &PID,
                 const std::string &USER,
                 const std::string &FD,
@@ -34,15 +36,19 @@ void LSOF::print_info(const std::string &COMMAND,
     if (!inputparser.getFileNFilter().empty() &&
         !std::regex_search(NAME, std::regex(inputparser.getFileNFilter()))) return;
 
-    std::cout << std::left << std::setfill(' ')
-              << std::setw(30) << COMMAND
-              << std::setw(8)  << PID
-              << std::setw(10) << USER
-              << std::setw(5)  << FD
-              << std::setw(10)  << TYPE
-              << std::setw(10) << NODE
-              << std::setw(30) << NAME
-              << std::endl;
+    printBuffer << std::left << std::setfill(' ')
+                << std::setw(30) << COMMAND
+                << std::setw(8)  << PID
+                << std::setw(10) << USER
+                << std::setw(5)  << FD
+                << std::setw(10)  << TYPE
+                << std::setw(10) << NODE
+                << std::setw(30) << NAME
+                << std::endl;
+}
+
+void LSOF::print_info() {
+    std::cout << printBuffer.str();
 }
 
 LSOF::LSOF(const std::string &pid,
@@ -50,11 +56,13 @@ LSOF::LSOF(const std::string &pid,
     pid(pid),
     command(getCOMMAND()),
     user(getUSER()),
-    inputparser(inputparser) {}
+    inputparser(inputparser),
+    printBuffer("") {}
 
 std::string LSOF::getCOMMAND() {
     std::ifstream infile("/proc/" + pid + "/comm");
     std::string cmd;
+    if(!infile.is_open()) return "";
     if (!(infile >> cmd)) return "";
     return cmd;
 }
@@ -69,30 +77,37 @@ std::string LSOF::getUSER() {
 
 void LSOF::run() {
     if (command.empty() || user.empty()) return;
-    cwdFd();
-    rtdFd();
-    txtFd();
-    memFd();
-    fdFd();
+    if(!cwdFd()) return;
+    if(!rtdFd()) return;
+    if(!txtFd()) return;
+    if(!memFd()) return;
+    if(!fdFd()) return;
+    print_info();
 }
 
-void LSOF::cwdFd() {
-    readFileInfo("/proc/" + pid + "/cwd", "cwd");
+bool LSOF::cwdFd() {
+    return readFileInfo("/proc/" + pid + "/cwd", "cwd");
 }
 
-void LSOF::rtdFd() {
-    readFileInfo("/proc/" + pid + "/root", "rtd");
+bool LSOF::rtdFd() {
+    return readFileInfo("/proc/" + pid + "/root", "rtd");
 }
 
-void LSOF::txtFd() {
-    readFileInfo("/proc/" + pid + "/exe", "txt");
+bool LSOF::txtFd() {
+    return readFileInfo("/proc/" + pid + "/exe", "txt");
 }
 
-void LSOF::memFd() {
+bool LSOF::memFd() {
     std::ifstream infile("/proc/" + pid + "/maps");
     std::string line;
     std::string t, inode, filename, deleted;
     std::string previnode = "";
+
+    if(!infile.is_open()) {
+        if(errno == EACCES) return true;
+        return false;
+    }
+
     while(std::getline(infile, line)) {
         std::istringstream iss(line);
         if (!(iss >> t >> t >> t >> t >> inode)) continue;
@@ -106,20 +121,22 @@ void LSOF::memFd() {
             previnode = inode;
         }
     }
+    return true;
 }
 
-void LSOF::fdFd() {
+bool LSOF::fdFd() {
     DIR *dp;
     struct dirent *dirp;
     if ((dp = opendir(("/proc/" + pid + "/fd").c_str())) == NULL) {
-        print_info(command, pid, user, "NOFD", "", "", "/proc/" + pid + "/fd (Permission denied)");
-        return;
+        save_info(command, pid, user, "NOFD", "", "", "/proc/" + pid + "/fd (Permission denied)");
+        return true;
     }
     while ((dirp = readdir(dp)) != NULL) {
         if (isnumber(std::string(dirp->d_name))) {
             std::ifstream infile("/proc/" + pid + "/fdinfo/" + std::string(dirp->d_name));
             std::string t, FD;
             int flags;
+            if(!infile.is_open()) continue;
             infile >> t >> t >> t >> std::oct >> flags;
             FD = dirp->d_name;
             switch(flags & O_ACCMODE) {
@@ -132,9 +149,10 @@ void LSOF::fdFd() {
         }
     }
     closedir(dp);
+    return true;
 }
 
-void LSOF::readFileInfo(std::string filename, const std::string &FD) {
+bool LSOF::readFileInfo(std::string filename, const std::string &FD) {
     struct stat sb;
     char realFileName[PATH_MAX] = {0};
     std::string TYPE = "unknown";
@@ -143,9 +161,10 @@ void LSOF::readFileInfo(std::string filename, const std::string &FD) {
     if (stat(filename.c_str(), &sb) == -1) {
         if(errno == EACCES) {
             filename += " (Permission denied)";
-            print_info(command, pid, user, FD, TYPE, NODE, filename);
+            save_info(command, pid, user, FD, TYPE, NODE, filename);
+            return true;
         }
-        return;
+        return false;
     }
 
     NODE = std::to_string(sb.st_ino);
@@ -159,12 +178,12 @@ void LSOF::readFileInfo(std::string filename, const std::string &FD) {
         default:       TYPE = "unknown";   break;
     }
 
-    if (lstat(filename.c_str(), &sb) == -1) return;
+    if (lstat(filename.c_str(), &sb) == -1) return false;
     if((sb.st_mode & S_IFMT) == S_IFLNK) {
-        if (readlink(filename.c_str(), realFileName, PATH_MAX) == -1) return;
+        if (readlink(filename.c_str(), realFileName, PATH_MAX) == -1) return false;
         filename = realFileName;
     }
 
-    print_info(command, pid, user, FD, TYPE, NODE, filename);
-    return;
+    save_info(command, pid, user, FD, TYPE, NODE, filename);
+    return true;
 }
