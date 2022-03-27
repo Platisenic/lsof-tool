@@ -12,6 +12,7 @@ private:
     std::string user;
     InputParser inputparser;
     std::stringstream printBuffer;
+    std::string previnode = "";
 
     void save_info(const std::string &COMMAND,
                     const std::string &PID,

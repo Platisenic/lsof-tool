@@ -57,7 +57,8 @@ LSOF::LSOF(const std::string &pid,
     command(getCOMMAND()),
     user(getUSER()),
     inputparser(inputparser),
-    printBuffer("") {}
+    printBuffer(""),
+    previnode("") {}
 
 std::string LSOF::getCOMMAND() {
     std::ifstream infile("/proc/" + pid + "/comm");
@@ -71,7 +72,7 @@ std::string LSOF::getUSER() {
     struct stat sb;
     struct passwd *pw;
     if (stat(("/proc/" + pid).c_str(), &sb) == -1) return "";
-    pw = getpwuid(sb.st_uid);
+    if ((pw = getpwuid(sb.st_uid)) == NULL) return "";
     return std::string(pw->pw_name);
 }
 
@@ -101,7 +102,6 @@ bool LSOF::memFd() {
     std::ifstream infile("/proc/" + pid + "/maps");
     std::string line;
     std::string t, inode, filename, deleted;
-    std::string previnode = "";
 
     if(!infile.is_open()) {
         if(errno == EACCES) return true;
@@ -183,7 +183,7 @@ bool LSOF::readFileInfo(std::string filename, const std::string &FD) {
         if (readlink(filename.c_str(), realFileName, PATH_MAX) == -1) return false;
         filename = realFileName;
     }
-
+    previnode = NODE;
     save_info(command, pid, user, FD, TYPE, NODE, filename);
     return true;
 }
